@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Avalon</title>
+<style>
+:root{--bg:#f4ecd8;--fg:#1a2240;--card:#fffaf0;--gold:#a8741a;--mut:#5b6384;--ok:#2e7d4f;--no:#b3382c;--bd:#d8c9a3;--on:#fffaf0;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1530;--fg:#f1e9d2;--card:#16214a;--gold:#e8b74a;--mut:#9aa5c8;--ok:#4fb97c;--no:#e5645a;--bd:#2a376b;--on:#0d1530}}
+:root[data-theme="dark"]{--bg:#0d1530;--fg:#f1e9d2;--card:#16214a;--gold:#e8b74a;--mut:#9aa5c8;--ok:#4fb97c;--no:#e5645a;--bd:#2a376b;--on:#0d1530}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.5 Georgia,"Times New Roman",serif;min-height:100vh}
+#app{max-width:480px;margin:0 auto;padding:20px 18px 40px}
+h1{font-size:34px;margin:8px 0 2px;color:var(--gold);letter-spacing:.5px}
+h2{font-size:24px;margin:6px 0 10px}
+p{margin:6px 0}
+.mut{color:var(--mut);font-size:15px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin:14px 0}
+.btn{display:block;width:100%;padding:15px;border:0;border-radius:12px;background:var(--gold);color:var(--on);font:600 18px Georgia,serif;margin:10px 0;cursor:pointer}
+.btn.alt{background:transparent;color:var(--fg);border:1px solid var(--bd)}
+.btn.ok{background:var(--ok);color:#fff}.btn.no{background:var(--no);color:#fff}
+.btn:disabled{opacity:.4}
+.btn:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+input[type=text]{width:100%;padding:11px 12px;margin:4px 0;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font:17px Georgia,serif}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.step{width:44px;height:44px;border-radius:50%;border:1px solid var(--bd);background:var(--card);color:var(--fg);font-size:22px}
+.chk{display:flex;gap:10px;align-items:flex-start;margin:10px 0}
+.chk input{margin-top:6px;width:20px;height:20px;accent-color:var(--gold)}
+.track{display:flex;justify-content:space-between;margin:14px 0}
+.q{width:56px;height:56px;border-radius:50%;border:2px solid var(--bd);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;font-weight:700}
+.q small{font-size:10px;font-weight:400;line-height:1}
+.q.cur{border-color:var(--gold);color:var(--gold)}
+.q.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.q.no{background:var(--no);border-color:var(--no);color:#fff}
+.role{text-align:center;padding:24px 16px}
+.role .nm{font-size:30px;font-weight:700;margin:4px 0}
+.good{color:var(--ok)}.evil{color:var(--no)}
+.cards{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:16px 0}
+.vc{width:64px;height:88px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:32px;color:#fff;font-weight:700}
+.pick{display:block;width:100%;text-align:left;padding:12px 14px;margin:6px 0;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--fg);font:17px Georgia,serif}
+.pick.sel{border-color:var(--gold);outline:2px solid var(--gold)}
+ul.rv{list-style:none;padding:0;margin:0}
+ul.rv li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const ROLES={
+merlin:{n:"Merlin",g:1,d:"You know who is evil, except Mordred. Stay hidden or the Assassin will find you."},
+percival:{n:"Percival",g:1,d:"You see Merlin and Morgana, but not which is which. Protect Merlin."},
+servant:{n:"Loyal Servant of Arthur",g:1,d:"You know nothing. Work out who to trust."},
+assassin:{n:"Assassin",g:0,d:"If good wins three quests, you get one guess to kill Merlin."},
+morgana:{n:"Morgana",g:0,d:"Percival sees you as a possible Merlin. Use it."},
+mordred:{n:"Mordred",g:0,d:"Merlin cannot see you."},
+oberon:{n:"Oberon",g:0,d:"You are evil, but you and the other evil players do not know each other."},
+minion:{n:"Minion of Mordred",g:0,d:"Work with your fellow evil players to fail the quests."}};
+const DIST={5:[3,2],6:[4,2],7:[4,3],8:[5,3],9:[6,3],10:[6,4]};
+const QS={5:[2,3,2,3,3],6:[2,3,4,3,4],7:[2,3,3,4,4],8:[3,4,4,5,5],9:[3,4,4,5,5],10:[3,4,4,5,5]};
+const app=document.getElementById("app");
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const shuf=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+let S={scr:"setup",n:5,names:[],opt:{pm:true,mordred:false,oberon:false}};
+const nm=i=>(S.names[i]||"").trim()||"Player "+(i+1);
+const evilSpec=()=>["assassin"].concat(S.opt.pm?["morgana"]:[],S.opt.mordred?["mordred"]:[],S.opt.oberon?["oberon"]:[]);
+
+function start(){
+ const [g,e]=DIST[S.n],o=S.opt;
+ const good=["merlin"].concat(o.pm?["percival"]:[]);while(good.length<g)good.push("servant");
+ const ev=evilSpec();while(ev.length<e)ev.push("minion");
+ const roles=shuf(good.concat(ev));
+ S.players=roles.map((r,i)=>({name:nm(i),role:r}));
+ Object.assign(S,{scr:"pass",i:0,shown:false,q:0,res:[],rej:0,leader:Math.floor(Math.random()*S.n)});
+ render();
+}
+function info(p){
+ const P=S.players,ev=P.filter(x=>!ROLES[x.role].g);
+ const L=a=>a.map(x=>esc(x.name)).join(", ");
+ if(p.role=="merlin")return "Evil players: "+L(ev.filter(x=>x.role!="mordred"));
+ if(p.role=="percival")return "Merlin and Morgana (one each, order shuffled): "+L(shuf(P.filter(x=>x.role=="merlin"||x.role=="morgana")));
+ if(!ROLES[p.role].g&&p.role!="oberon"){const o=ev.filter(x=>x!==p&&x.role!="oberon");return o.length?"Fellow evil players: "+L(o):"You have no visible allies."}
+ return "You have no special information.";
+}
+function track(){
+ return '<div class="track">'+QS[S.n].map((c,i)=>{const r=S.res[i];
+  return `<div class="q ${r==="s"?"ok":r==="f"?"no":""} ${i==S.q&&r===undefined?"cur":""}">${r==="s"?"✓":r==="f"?"✗":c}${i==3&&S.n>=7&&r===undefined?"<small>2 fails</small>":""}</div>`}).join("")+"</div>";
+}
+function render(){
+ const f=window["scr_"+S.scr];app.innerHTML=f();
+}
+window.scr_setup=()=>{
+ const need=DIST[S.n],bad=evilSpec().length>need[1];
+ let inputs="";for(let i=0;i<S.n;i++)inputs+=`<input type="text" aria-label="Player ${i+1}" placeholder="Player ${i+1}" value="${esc(S.names[i]||"")}" oninput="S.names[${i}]=this.value">`;
+ return `<h1>Avalon</h1><p class="mut">One device, passed around the table. Roles are secret, quest votes are anonymous.</p>
+ <div class="card"><div class="row"><button class="step" onclick="cnt(-1)" aria-label="Fewer players">−</button><div style="text-align:center"><b style="font-size:26px">${S.n} players</b><div class="mut">${need[0]} good, ${need[1]} evil</div></div><button class="step" onclick="cnt(1)" aria-label="More players">+</button></div></div>
+ <div class="card"><b>Player names</b>${inputs}</div>
+ <div class="card"><b>Special roles</b>
+ <p class="mut">Merlin and the Assassin are always in.</p>
+ <label class="chk"><input type="checkbox" ${S.opt.pm?"checked":""} onchange="tg('pm')"><span>Percival and Morgana</span></label>
+ <label class="chk"><input type="checkbox" ${S.opt.mordred?"checked":""} onchange="tg('mordred')"><span>Mordred<br><span class="mut">Hidden from Merlin</span></span></label>
+ <label class="chk"><input type="checkbox" ${S.opt.oberon?"checked":""} onchange="tg('oberon')"><span>Oberon<br><span class="mut">Evil, but unknown to the other evil players</span></span></label>
+ ${bad?`<p class="evil">Too many evil roles for ${S.n} players. Turn one off.</p>`:""}</div>
+ <button class="btn" ${bad?"disabled":""} onclick="start()">Deal roles</button>`;
+};
+function cnt(d){S.n=Math.min(10,Math.max(5,S.n+d));render()}
+function tg(k){S.opt[k]=!S.opt[k];render()}
+window.scr_pass=()=>{
+ const p=S.players[S.i],R=ROLES[p.role];
+ if(!S.shown)return `<h2>Pass the device to ${esc(p.name)}</h2><p class="mut">Make sure nobody else is looking, then reveal your role. (${S.i+1} of ${S.n})</p><button class="btn" onclick="S.shown=true;render()">I’m ${esc(p.name)}, show my role</button>`;
+ return `<div class="card role"><p class="mut">${esc(p.name)}, you are</p><div class="nm ${R.g?"good":"evil"}">${R.n}</div><p class="${R.g?"good":"evil"}">${R.g?"Good":"Evil"}</p><p>${R.d}</p><hr style="border:0;border-top:1px solid var(--bd);margin:14px 0"><p>${info(p)}</p></div>
+ <button class="btn" onclick="nextPass()">Hide and pass on</button>`;
+};
+function nextPass(){S.shown=false;S.i++;if(S.i>=S.n)S.scr="board";render()}
+window.scr_board=()=>{
+ const size=QS[S.n][S.q];
+ return `<h2>Quest ${S.q+1}</h2>${track()}
+ <div class="card"><p>Leader: <b>${esc(S.players[S.leader].name)}</b></p><p>Picks a team of <b>${size}</b> players.</p>
+ <p class="mut">${S.q==3&&S.n>=7?"This quest needs two fails to fail.":"One fail is enough to fail this quest."}</p></div>
+ <button class="btn" onclick="startVote()">Team approved, start quest vote</button>
+ <button class="btn alt" onclick="reject()">Team rejected (${S.rej}/5)</button>
+ <p class="mut">Five rejected teams in a row and evil wins.</p>`;
+};
+function reject(){S.rej++;S.leader=(S.leader+1)%S.n;if(S.rej>=5){S.win="evil";S.why="Five teams were rejected in a row.";S.scr="end"}render()}
+function startVote(){S.v={list:[],open:false,total:QS[S.n][S.q]};S.scr="vote";render()}
+window.scr_vote=()=>{
+ const v=S.v,k=v.list.length+1;
+ if(!v.open)return `<h2>Quest ${S.q+1} vote</h2><p class="mut">Vote ${k} of ${v.total}. Pass the device to a team member. Nobody sees who votes what.</p><button class="btn" onclick="S.v.open=true;render()">I’m on the team, show my vote</button>`;
+ return `<h2>Your vote</h2><p class="mut">Good players must choose success. Evil players may choose either.</p>
+ <button class="btn ok" onclick="cast('s')">Success</button><button class="btn no" onclick="cast('f')">Fail</button>`;
+};
+function cast(x){const v=S.v;v.list.push(x);v.open=false;if(v.list.length>=v.total){v.sh=shuf(v.list);S.scr="result"}render()}
+window.scr_result=()=>{
+ const sh=S.v.sh,fails=sh.filter(x=>x=="f").length,need=(S.q==3&&S.n>=7)?2:1,failed=fails>=need;
+ S.v.failed=failed;
+ return `<h2>Quest ${S.q+1} result</h2>
+ <div class="cards">${sh.map(x=>`<div class="vc" style="background:var(--${x=="s"?"ok":"no"})">${x=="s"?"✓":"✗"}</div>`).join("")}</div>
+ <div class="card role"><div class="nm ${failed?"evil":"good"}">${failed?"Quest failed":"Quest succeeded"}</div><p class="mut">${fails} fail${fails==1?"":"s"}, ${sh.length-fails} success${sh.length-fails==1?"":"es"}</p></div>
+ <button class="btn" onclick="after()">Continue</button>`;
+};
+function after(){
+ S.res[S.q]=S.v.failed?"f":"s";
+ const g=S.res.filter(x=>x=="s").length,e=S.res.filter(x=>x=="f").length;
+ if(e>=3){S.win="evil";S.why="Three quests failed.";S.scr="end"}
+ else if(g>=3){S.scr="kill";S.pick=null}
+ else{S.q++;S.leader=(S.leader+1)%S.n;S.rej=0;S.scr="board"}
+ render();
+}
+window.scr_kill=()=>{
+ const a=S.players.find(p=>p.role=="assassin");
+ return `<h2>Three quests succeeded</h2>${track()}<p>Good is one step from winning. The Assassin (<b>${esc(a.name)}</b>) now picks who they think is Merlin. Discuss quietly, then choose.</p>
+ ${S.players.map((p,i)=>`<button class="pick ${S.pick===i?"sel":""}" onclick="S.pick=${i};render()">${esc(p.name)}</button>`).join("")}
+ <button class="btn" ${S.pick===null?"disabled":""} onclick="kill()">Confirm pick</button>`;
+};
+function kill(){
+ const m=S.players[S.pick];
+ if(m.role=="merlin"){S.win="evil";S.why=m.name+" was Merlin. The Assassin found him."}
+ else{S.win="good";S.why=m.name+" was not Merlin. Merlin stays hidden."}
+ S.scr="end";render();
+}
+window.scr_end=()=>`<h1>${S.win=="good"?"Good wins":"Evil wins"}</h1><p class="${S.win=="good"?"good":"evil"}"><b>${esc(S.why)}</b></p>${track()}
+ <div class="card"><b>Roles</b><ul class="rv">${S.players.map(p=>`<li><span>${esc(p.name)}</span><span class="${ROLES[p.role].g?"good":"evil"}">${ROLES[p.role].n}</span></li>`).join("")}</ul></div>
+ <button class="btn" onclick="S.scr='setup';render()">Play again</button>`;
+render();
+</script>
+</body>
+</html>
